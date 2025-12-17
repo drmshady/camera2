@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:keepScreenOn="true">
+
+    <!-- ================= CAMERA PREVIEW ================= -->
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter" />
+
+        <!-- Exposure / Manual settings overlay -->
+
+
+    </FrameLayout>
+    <!-- Live camera readback overlay -->
+    <LinearLayout
+        android:id="@+id/readbackPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:background="#66000000"
+        android:layout_margin="12dp"
+        android:elevation="6dp">
+
+        <TextView
+            android:id="@+id/tvIso"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ISO —"
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvShutter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Shutter —"
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvFocus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Focus —"
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+
+    <!-- ================= CONTROLS ================= -->
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Photogrammetry Lock -->
+        <Switch
+            android:id="@+id/swPhotogrammetryLock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Photogrammetry lock (AF/AE OFF)" />
+
+        <!-- Audio toggle -->
+        <Switch
+            android:id="@+id/swAudio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Record audio (video)" />
+
+        <!-- Focus -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Focus (0 = far, 1000 = near)" />
+
+        <SeekBar
+            android:id="@+id/sbFocus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1000" />
+
+        <!-- ISO -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ISO" />
+
+        <SeekBar
+            android:id="@+id/sbIso"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1000" />
+
+        <!-- Shutter -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Shutter" />
+
+        <SeekBar
+            android:id="@+id/sbShutter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1000" />
+
+        <!-- Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingTop="8dp">
+
+            <Button
+                android:id="@+id/btnPhoto"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="PHOTO" />
+
+            <Button
+                android:id="@+id/btnVideo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="START VIDEO" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
