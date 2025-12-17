@@ -6,29 +6,30 @@ import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Range
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.SeekBar
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.CaptureRequestOptions
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.cameraxapp.databinding.ActivityMainBinding
-import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.min
 
+@OptIn(ExperimentalCamera2Interop::class)
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -93,10 +94,16 @@ class MainActivity : AppCompatActivity() {
 
         binding.spVideoFps.setSelection(2)
 
-        binding.spVideoFps.setOnItemSelectedListener { _, _, pos, _ ->
-            selectedFps = fpsValues[pos]
-            updateVideoShutterLimit()
-            applyCamera2Controls()
+        binding.spVideoFps.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                selectedFps = fpsValues[position]
+                updateVideoShutterLimit()
+                applyCamera2Controls()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                // Do nothing
+            }
         }
     }
 
@@ -132,7 +139,7 @@ class MainActivity : AppCompatActivity() {
             val provider = providerFuture.get()
 
             val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(binding.previewView.surfaceProvider)
+                it.surfaceProvider = binding.previewView.surfaceProvider
             }
 
             imageCapture = ImageCapture.Builder().build()
@@ -272,10 +279,12 @@ class MainActivity : AppCompatActivity() {
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         ).setContentValues(values).build()
 
-        activeRecording = vc.output
-            .prepareRecording(this, opts)
-            .apply { if (allPermissionsGranted()) withAudioEnabled() }
-            .start(ContextCompat.getMainExecutor(this)) {
+        val pendingRecording = vc.output.prepareRecording(this, opts)
+        if (allPermissionsGranted()) {
+            pendingRecording.withAudioEnabled()
+        }
+
+        activeRecording = pendingRecording.start(ContextCompat.getMainExecutor(this)) {
                 if (it is VideoRecordEvent.Start) binding.btnVideo.text = "Stop Video"
                 if (it is VideoRecordEvent.Finalize) binding.btnVideo.text = "Start Video"
             }
