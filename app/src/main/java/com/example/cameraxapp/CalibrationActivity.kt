@@ -11,15 +11,19 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.hardware.camera2.params.RggbChannelVector
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.util.Range
+import android.util.Rational
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -32,6 +36,7 @@ import androidx.camera.video.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.cameraxapp.databinding.ActivityMainBinding
+import com.google.gson.Gson
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -62,9 +67,11 @@ class CalibrationActivity : AppCompatActivity() {
     companion object {
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
         )
         private const val DATE_FORMAT = "yyyyMMdd_HHmmss"
+        private const val TAG = "CalibrationActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,6 +141,20 @@ class CalibrationActivity : AppCompatActivity() {
             putInt("iso", isoRange?.let { it.lower + ((it.upper - it.lower) * (binding.sbIso.progress / 1000f)).toInt() } ?: 0)
             putLong("shutterSpeed", exposureRangeNs?.let { it.lower + ((it.upper - it.lower) * (binding.sbShutter.progress / 1000f)).toLong() } ?: 0L)
             putFloat("focusDistance", minFocusDistance?.let { (binding.sbFocus.progress / 1000f) * it } ?: 0f)
+            putInt("fps", selectedFps)
+
+            lastCaptureResult?.let {
+                val gains = it.get(CaptureResult.COLOR_CORRECTION_GAINS)
+                val transform = it.get(CaptureResult.COLOR_CORRECTION_TRANSFORM)
+                if (gains != null && transform != null) {
+                    putString("awbGains", Gson().toJson(gains))
+                    putString("awbTransform", Gson().toJson(transform))
+                } else {
+                    Toast.makeText(this@CalibrationActivity, "AWB data not available", Toast.LENGTH_SHORT).show()
+                    return
+                }
+            }
+
             apply()
         }
 
@@ -384,22 +405,47 @@ class CalibrationActivity : AppCompatActivity() {
             metadata.put("iso", it.get(CaptureResult.SENSOR_SENSITIVITY))
             metadata.put("shutterSpeed", it.get(CaptureResult.SENSOR_EXPOSURE_TIME))
             metadata.put("focusDistance", it.get(CaptureResult.LENS_FOCUS_DISTANCE))
+            val gains = it.get(CaptureResult.COLOR_CORRECTION_GAINS)
+            val transform = it.get(CaptureResult.COLOR_CORRECTION_TRANSFORM)
+            if (gains != null && transform != null) {
+                metadata.put("awbGains", Gson().toJson(gains))
+                metadata.put("awbTransform", Gson().toJson(transform))
+            }
+        }
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "$videoName.json")
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CameraXApp")
+            }
         }
 
         try {
-            val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).toString() + "/CameraXApp"
-            val dir = File(path)
-            if (!dir.exists()) {
-                dir.mkdirs()
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val cameraXAppDir = File(downloadsDir, "CameraXApp")
+                if (!cameraXAppDir.exists()) {
+                    cameraXAppDir.mkdirs()
+                }
+                val file = File(cameraXAppDir, "$videoName.json")
+                FileOutputStream(file).use { outputStream ->
+                    outputStream.write(metadata.toString(4).toByteArray())
+                }
+                return
             }
-            val file = File(path, "$videoName.json")
-            FileOutputStream(file).use {
-                it.write(metadata.toString(4).toByteArray())
+            contentResolver.insert(collection, contentValues)?.also { uri ->
+                contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(metadata.toString(4).toByteArray())
+                }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error saving metadata", e)
         }
     }
+
 
     private fun allPermissionsGranted() =
         REQUIRED_PERMISSIONS.all {

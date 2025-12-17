@@ -39,4 +39,5 @@ dependencies {
 
     // For JSON (simple)
     implementation("org.json:json:20231013")
+    implementation("com.google.code.gson:gson:2.10.1")
 }
