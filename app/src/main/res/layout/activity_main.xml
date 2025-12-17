@@ -14,19 +14,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <View
-        android:id="@+id/vRoi"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintWidth_percent="0.45"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
     <LinearLayout
-        android:id="@+id/panel"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -39,41 +27,47 @@
             android:id="@+id/swPhotogrammetryLock"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Photogrammetry lock (AF/AE OFF)"/>
-
-        <Switch
-            android:id="@+id/swAudio"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Record audio (video)"/>
+            android:text="Photogrammetry lock (manual exposure)"/>
 
         <Switch
             android:id="@+id/swTorch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Torch (continuous light)" />
+            android:text="Torch (continuous light)"/>
 
         <TextView
-            android:id="@+id/tvQuality"
+            android:text="Video FPS"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Quality: ..." />
+            android:layout_height="wrap_content"/>
+
+        <Spinner
+            android:id="@+id/spVideoFps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
 
         <TextView
+            android:id="@+id/tvShutterLimit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Focus (0 = far, 1000 = near)"/>
+            android:text="Max video shutter —"
+            android:textStyle="bold"
+            android:paddingTop="4dp"/>
+
+        <TextView
+            android:text="Shutter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
 
         <SeekBar
-            android:id="@+id/sbFocus"
+            android:id="@+id/sbShutter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:max="1000"/>
 
         <TextView
+            android:text="ISO"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ISO"/>
+            android:layout_height="wrap_content"/>
 
         <SeekBar
             android:id="@+id/sbIso"
@@ -82,35 +76,23 @@
             android:max="1000"/>
 
         <TextView
+            android:id="@+id/tvFocusDistance"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Shutter"/>
+            android:text="Focus: —"
+            android:textStyle="bold"/>
 
         <SeekBar
-            android:id="@+id/sbShutter"
+            android:id="@+id/sbFocus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:max="1000"/>
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btnVideo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnPhoto"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Photo"/>
-
-            <Button
-                android:id="@+id/btnVideo"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Start Video"/>
-        </LinearLayout>
+            android:text="Start Video"/>
 
     </LinearLayout>
 
