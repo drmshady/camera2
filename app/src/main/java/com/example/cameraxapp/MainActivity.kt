@@ -48,6 +48,9 @@ class MainActivity : AppCompatActivity() {
 
     private var qualityOkStreak = 0
     private var prevMotionSample: IntArray? = null
+    private var sharpEma = 0.0
+    private var sharpPeak = 0.0
+
 
     companion object {
         private const val TAG = "CAM_DEBUG"
@@ -140,8 +143,8 @@ class MainActivity : AppCompatActivity() {
         val w = image.width
         val h = image.height
 
-        val roiW = (w * 0.45).toInt()
-        val roiH = (h * 0.35).toInt()
+        val roiW = (w * 0.25).toInt()
+        val roiH = (h * 0.25).toInt()
         val roiL = (w - roiW) / 2
         val roiT = (h - roiH) / 2
         val roiR = roiL + roiW
@@ -228,7 +231,29 @@ class MainActivity : AppCompatActivity() {
         prevMotionSample = motionNow
 
         val expOk = mean in 90.0..180.0 && blackPct < 1.0 && whitePct < 1.0 && specPct < 0.2
-        val focusOk = lapVar > 150.0
+        // ---- Noise estimate (so high ISO noise won't fake "sharpness") ----
+        var noiseSum = 0.0
+        var noiseN = 0
+        val noiseStep = 8
+        for (y in roiT until roiB - noiseStep step noiseStep) {
+            val row = y * rowStride
+            val rowD = (y + noiseStep) * rowStride
+            for (x in roiL until roiR - noiseStep step noiseStep) {
+                val a = (buf.get(row + x).toInt() and 0xFF)
+                val b = (buf.get(row + x + noiseStep).toInt() and 0xFF)
+                val c = (buf.get(rowD + x).toInt() and 0xFF)
+                noiseSum += kotlin.math.abs(a - b) + kotlin.math.abs(a - c)
+                noiseN += 2
+            }
+        }
+        val noiseMad = if (noiseN > 0) noiseSum / noiseN else 0.0
+
+// Noise-normalized sharpness score (higher = truly sharper)
+        val sharpScore = lapVar / ((noiseMad + 1.0) * (noiseMad + 1.0))
+
+// Thresholds: tune these if needed
+        val focusOk = sharpScore > 8.0
+
         val motionOk = mad < 10.0
         val qualityOk = expOk && focusOk && motionOk
 
