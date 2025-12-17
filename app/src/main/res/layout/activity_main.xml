@@ -94,6 +94,12 @@
             android:layout_height="wrap_content"
             android:text="Start Video"/>
 
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save Calibration"/>
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
