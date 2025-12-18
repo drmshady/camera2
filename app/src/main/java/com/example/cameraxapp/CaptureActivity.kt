@@ -24,6 +24,9 @@ import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Quality
@@ -54,6 +57,9 @@ class CaptureActivity : AppCompatActivity() {
     private var shutterSpeed = 0L
     private var focusDistance = 0f
     private var fps = 30
+
+    private var imageCapture: ImageCapture? = null
+    private var camera: Camera? = null
 
     // We lock AWB only after it converges (safe on Samsung)
     @Volatile private var awbLockedApplied = false
@@ -89,6 +95,8 @@ class CaptureActivity : AppCompatActivity() {
         if (ok) startCamera() else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, 10)
 
         binding.btnRecordVideo.setOnClickListener { toggleVideo() }
+        binding.btnTakePhoto.setOnClickListener { takePhoto() }
+        binding.swTorchCapture.setOnCheckedChangeListener { _, on -> camera?.cameraControl?.enableTorch(on) }
     }
 
     override fun onRequestPermissionsResult(
@@ -136,6 +144,8 @@ class CaptureActivity : AppCompatActivity() {
                 it.surfaceProvider = binding.previewView.surfaceProvider
             }
 
+            imageCapture = ImageCapture.Builder().build()
+
             val recorder = Recorder.Builder()
                 .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
                 .build()
@@ -143,15 +153,21 @@ class CaptureActivity : AppCompatActivity() {
             videoCapture = VideoCapture.withOutput(recorder)
 
             provider.unbindAll()
-            val camera = provider.bindToLifecycle(
+            camera = provider.bindToLifecycle(
                 this,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 preview,
+                imageCapture,
                 videoCapture
             )
 
             // Choose a supported FPS range (prevents Samsung silent reject)
-            val info = Camera2CameraInfo.from(camera.cameraInfo)
+            val cam = camera ?: run {
+                Log.e(TAG, "Camera not bound")
+                return@addListener
+            }
+
+            val info = Camera2CameraInfo.from(cam.cameraInfo)
             val ranges = info.getCameraCharacteristic(
                 CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES
             ) ?: emptyArray()
@@ -165,7 +181,7 @@ class CaptureActivity : AppCompatActivity() {
             val safeShutter = min(shutterSpeed, maxVideoExposureNs)
 
             // Apply Samsung-safe manual exposure/focus WITHOUT risky AWB OFF
-            val c2 = Camera2CameraControl.from(camera.cameraControl)
+            val c2 = Camera2CameraControl.from(cam.cameraControl)
             val opts = CaptureRequestOptions.Builder()
                 .setCaptureRequestOption(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
 
@@ -295,6 +311,78 @@ class CaptureActivity : AppCompatActivity() {
 
         try {
             val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            if (uri == null) {
+                Log.e(TAG, "Failed to insert metadata file into MediaStore")
+                return
+            }
+            contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(metadata.toString(4).toByteArray())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving metadata", e)
+        }
+    }
+
+    private fun takePhoto() {
+        val ic = imageCapture ?: run {
+            Toast.makeText(this, "ImageCapture not ready", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val baseName = SimpleDateFormat(DATE_FORMAT, Locale.US).format(System.currentTimeMillis())
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseName.jpg")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraXApp")
+            }
+        }
+
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(
+            contentResolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values
+        ).build()
+
+        ic.takePicture(outputOptions, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
+            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                Toast.makeText(this@CaptureActivity, "Photo saved", Toast.LENGTH_SHORT).show()
+                saveMetadataNextToImage(baseName)
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                Log.e(TAG, "Photo capture failed", exception)
+                Toast.makeText(this@CaptureActivity, "Photo capture failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun saveMetadataNextToImage(baseName: String) {
+        val sharedPref = getSharedPreferences("CaptureData", Context.MODE_PRIVATE)
+        val doctorName = sharedPref.getString("doctorName", "") ?: ""
+        val patientId = sharedPref.getString("patientId", "") ?: ""
+
+        val metadata = JSONObject().apply {
+            put("doctorName", doctorName)
+            put("patientId", patientId)
+            put("date", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date()))
+            put("iso", iso)
+            put("shutterNs", shutterSpeed)
+            put("focusDistance", focusDistance)
+            put("fps", fps)
+            put("awbMode", "AUTO_then_LOCK")
+        }
+
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseName.json")
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CameraXApp")
+            }
+        }
+
+        try {
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             if (uri == null) {
                 Log.e(TAG, "Failed to insert metadata file into MediaStore")
                 return

@@ -33,6 +33,7 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Quality
@@ -141,6 +142,7 @@ class CalibrationActivity : AppCompatActivity() {
             camera?.cameraControl?.enableTorch(on)
         }
 
+        binding.btnPhoto.setOnClickListener { takePhoto() }
         binding.btnVideo.setOnClickListener { toggleVideo() }
         binding.btnSave.setOnClickListener { saveCalibrationAndGoCapture() }
 
@@ -454,6 +456,83 @@ class CalibrationActivity : AppCompatActivity() {
 
         try {
             val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            if (uri == null) {
+                Log.e(TAG, "Failed to insert metadata file into MediaStore")
+                return
+            }
+            contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(metadata.toString(4).toByteArray())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving metadata", e)
+        }
+    }
+
+    private fun takePhoto() {
+        val ic = imageCapture ?: run {
+            Toast.makeText(this, "ImageCapture not ready", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val baseName = SimpleDateFormat(DATE_FORMAT, Locale.US).format(System.currentTimeMillis())
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseName.jpg")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraXApp")
+            }
+        }
+
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(
+            contentResolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values
+        ).build()
+
+        ic.takePicture(outputOptions, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
+            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                Toast.makeText(this@CalibrationActivity, "Photo saved", Toast.LENGTH_SHORT).show()
+                saveMetadataNextToImage(baseName)
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                Log.e(TAG, "Photo capture failed", exception)
+                Toast.makeText(this@CalibrationActivity, "Photo capture failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun saveMetadataNextToImage(baseName: String) {
+        val sharedPref = getSharedPreferences("CaptureData", Context.MODE_PRIVATE)
+        val doctorName = sharedPref.getString("doctorName", "") ?: ""
+        val patientId = sharedPref.getString("patientId", "") ?: ""
+
+        val metadata = JSONObject().apply {
+            put("doctorName", doctorName)
+            put("patientId", patientId)
+            put("date", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date()))
+
+            lastCaptureResult?.let {
+                put("iso", it.get(CaptureResult.SENSOR_SENSITIVITY))
+                put("shutterNs", it.get(CaptureResult.SENSOR_EXPOSURE_TIME))
+                put("focusDistance", it.get(CaptureResult.LENS_FOCUS_DISTANCE))
+            }
+
+            frozenGains?.let { put("awbGains", Gson().toJson(it)) }
+            frozenTransform?.let { put("awbTransform", Gson().toJson(it)) }
+            put("fps", selectedFps)
+        }
+
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseName.json")
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CameraXApp")
+            }
+        }
+
+        try {
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             if (uri == null) {
                 Log.e(TAG, "Failed to insert metadata file into MediaStore")
                 return

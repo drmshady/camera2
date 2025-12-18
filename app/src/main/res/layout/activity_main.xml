@@ -89,6 +89,12 @@
             android:max="1000"/>
 
         <Button
+            android:id="@+id/btnPhoto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Take Photo"/>
+
+        <Button
             android:id="@+id/btnVideo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

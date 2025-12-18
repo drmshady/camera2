@@ -26,6 +26,25 @@
         app:layout_constraintTop_toTopOf="parent"
         tools:text="ISO: 100\nShutter Speed: 1000000\nFocus Distance: 0.0" />
 
+    <Switch
+        android:id="@+id/swTorchCapture"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Torch"
+        android:textColor="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvCaptureData" />
+
+    <Button
+        android:id="@+id/btnTakePhoto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Take Photo"
+        app:layout_constraintBottom_toTopOf="@id/btnRecordVideo"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <Button
         android:id="@+id/btnRecordVideo"
         android:layout_width="wrap_content"
