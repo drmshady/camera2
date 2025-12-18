@@ -29,9 +29,16 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.MediaStoreOutputOptions
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.YuvImage
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
@@ -212,50 +219,76 @@ class CaptureActivity : AppCompatActivity() {
     private fun takePhoto(inBurst: Boolean = false) {
         val imageCapture = this.imageCapture ?: return
 
-        val name = SimpleDateFormat(DATE_FORMAT, Locale.US).format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "$name.jpg")
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraXApp")
-            }
-        }
+        imageCapture.takePicture(ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                try {
+                    val bitmap = imageProxyToBitmap(image)
 
-        val imageUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-        if (imageUri == null) {
-            Log.e(TAG, "Failed to create MediaStore entry for image.")
-            return
-        }
+                    val name = SimpleDateFormat(DATE_FORMAT, Locale.US).format(System.currentTimeMillis()) + "_" + (System.currentTimeMillis() % 10000)
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, "$name.png")
+                        put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraXApp")
+                        }
+                    }
 
-        val outputStream: OutputStream? = try {
-            contentResolver.openOutputStream(imageUri)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to open output stream", e)
-            return
-        }
+                    val imageUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                    if (imageUri == null) {
+                        Log.e(TAG, "Failed to create MediaStore entry for image.")
+                        return
+                    }
 
-        if (outputStream == null) {
-            Log.e(TAG, "Output stream is null.")
-            return
-        }
+                    contentResolver.openOutputStream(imageUri)?.use { os ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
+                    }
 
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(outputStream).build()
-
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
-                }
-
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     if (!inBurst) {
                         Toast.makeText(baseContext, "Photo capture succeeded", Toast.LENGTH_SHORT).show()
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Photo save failed", e)
+                } finally {
+                    image.close()
                 }
             }
-        )
+
+            override fun onError(exception: ImageCaptureException) {
+                Log.e(TAG, "Photo capture failed", exception)
+            }
+        })
+    }
+
+    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+        return when (image.format) {
+            ImageFormat.JPEG -> {
+                val buffer: ByteBuffer = image.planes[0].buffer
+                val bytes = ByteArray(buffer.remaining())
+                buffer.get(bytes)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+            ImageFormat.YUV_420_888 -> {
+                val yBuffer = image.planes[0].buffer
+                val uBuffer = image.planes[1].buffer
+                val vBuffer = image.planes[2].buffer
+
+                val ySize = yBuffer.remaining()
+                val uSize = uBuffer.remaining()
+                val vSize = vBuffer.remaining()
+
+                val nv21 = ByteArray(ySize + uSize + vSize)
+                yBuffer.get(nv21, 0, ySize)
+                vBuffer.get(nv21, ySize, vSize)
+                uBuffer.get(nv21, ySize + vSize, uSize)
+
+                val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+                val out = ByteArrayOutputStream()
+                yuvImage.compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 100, out)
+                val jpegBytes = out.toByteArray()
+                BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+            }
+            else -> throw IllegalArgumentException("Unsupported image format: ${image.format}")
+        }
     }
 
     private fun startBurst() {
